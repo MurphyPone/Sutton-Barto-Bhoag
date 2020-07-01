@@ -36,5 +36,5 @@ def train(ε):
                 successes[agent] = 0                                                   
 
         # plot μ progress for all agents 
-        new = True if t ==0 else False 
+        new = True if t == 0 else False 
         plot(t, successes.mean(), '% Optimal Action: ε-greedy', f"ε: {ε}", new)
