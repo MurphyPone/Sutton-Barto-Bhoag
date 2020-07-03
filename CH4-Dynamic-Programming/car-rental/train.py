@@ -32,11 +32,10 @@ def expected_return(s, a, V):
             # price of all rentals
             reward = (actual_rentals_1 + actual_rentals_2) * 10
 
-
             """ constant returns/day -> considerably shorter run time """
             p_total = p_rentals_1 * p_rentals_2 
             num_cars_1 = np.clip(num_cars_1 - actual_rentals_1 + 3, 0, dim)
-            num_cars_2 = np.clip(num_cars_1 - actual_rentals_1 + 2, 0, dim)
+            num_cars_2 = np.clip(num_cars_2 - actual_rentals_2 + 2, 0, dim)
             ret += p_total * (reward + (γ * V[num_cars_1][num_cars_2]))
             
             """ poisson returns/day -> considerably longer run time """
@@ -68,11 +67,11 @@ def policy_evaluation(states, π, V):
             # update the max change in values for this iteration
             Δ = max(Δ, abs(v - V[x][y]))
 
-    plot_V(V)
+        plot_V(V)
 
-    # stop updating values if max change is small enough 
-    if Δ < θ:
-        return V
+        # stop updating values if max change is small enough 
+        if Δ < θ:
+            return V
 
 def policy_iteration(states, π, V):
     stable = True 
@@ -104,7 +103,7 @@ if __name__ == '__main__':
     
     states = []                 # init the states
     for x in range(dim + 1):
-        for y in range(dim +1):
+        for y in range(dim + 1):
             states.append((x,y))
 
     # init the value and policy to 0s
