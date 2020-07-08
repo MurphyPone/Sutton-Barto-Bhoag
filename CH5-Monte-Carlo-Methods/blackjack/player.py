@@ -1,7 +1,7 @@
 import numpy as np 
 from tqdm import tqdm
+from visualize import *
 from visdom import Visdom
-
 viz = Visdom()
 
 HIT = 0 
@@ -190,8 +190,6 @@ def monte_carlo_ε(eps):
     
     return sa_vals / sa_pair_count
 
-
-
 def monte_carlo_off_policy(eps):
     init_s = [True, 13, 2]
 
@@ -226,7 +224,7 @@ def monte_carlo_off_policy(eps):
     with np.errstate(divide='ignore', invalid='ignore'):
         weighted_sampling = np.where(rhos != 0, weighted_returns / rhos, 0)
     
-    return ordinary_sampling
+    return ordinary_sampling, weighted_sampling
 
 
 ## Plot results of the above MC methods
@@ -241,21 +239,7 @@ def fig_5_1():
     titles = ['usable A - 10,000 eps', 'usable A - 500,000 eps',
                 'No usable A - 10,000 eps', 'No usable A - 500,000 eps']
     for state, title in zip(states, titles):
-        viz.heatmap(
-            X=np.flipud(state), 
-            win=title, 
-            opts=dict(
-                title=title,
-                columnnames=list(reversed(range(1,11))),
-                rownames=list(reversed(range(12,22))),
-                layoutopts=dict(
-                    plotly={
-                        'xaxis': {'title': "dealer showing"},
-                        'yaxis': {'title': "agent sum"}
-                    }
-                )
-            )
-        )
+        heatmap(state, title)
 
 def fig_5_2():
     sa_vals = monte_carlo_ε(500000)
@@ -274,22 +258,68 @@ def fig_5_2():
                 'π* w/o usable Ace', 'v* w/o usable Ace']
 
     for state, title in zip(states, titles):
-        viz.heatmap(
-            X=np.flipud(state), 
-            win=title, 
-            opts=dict(
-                title=title,
-                columnnames=list(reversed(range(1,11))),
-                rownames=list(reversed(range(12,22))),
-                layoutopts=dict(
-                    plotly={
-                        'xaxis': {'title': "dealer showing"},
-                        'yaxis': {'title': "agent sum"}
-                    }
-                )
-            )
-        )
+        heatmap(state, title)
+
+def fig_5_3():
+    true_val = -0.27726
+    eps = 10000
+    runs = 100
+    err_ordinary, err_weighted = np.zeros(eps), np.zeros(eps)
+
+    for i in tqdm(range(0, runs)):
+        ordinary_sampling, weighted_sampling = monte_carlo_off_policy(eps)
+        # calc MSE
+        err_ordinary += np.power(ordinary_sampling - true_val, 2)
+        err_weighted += np.power(weighted_sampling - true_val, 2)
+    
+    err_ordinary /= runs
+    err_weighted /= runs
+
+    plot(eps, err_ordinary, "Importance Sampling", "Ordinary", "append")
+    plot(eps, err_weighted, "Importance Sampling", "Weighted", "append")
+
+    # viz.line(
+    #     X=np.array([i for i in range(eps)]), 
+    #     Y=np.array(err_ordinary), 
+    #     win="Importance Sampling", 
+    #     name="Ordinary", 
+    #     opts=dict(
+    #         title="Importance Sampling", 
+    #         showlegend=True,
+    #         layoutopts=dict(
+    #             plotly={
+    #                 'xaxis': {'title': "episodes (log)", 'type': 'log'},
+    #                 'yaxis': {'title': "MSE"}
+    #             }
+    #         )
+    #     )
+    # )
+
+    # viz.line(
+    #     X=np.array([i for i in range(eps)]), 
+    #     Y=np.array(err_weighted), 
+    #     win="Importance Sampling", 
+    #     name="Weighted", 
+    #     update='append',
+    #     opts=dict( 
+    #         showlegend=True,
+    #         layoutopts=dict(
+    #             plotly={
+    #                 'xaxis': {'title': "episodes (log)", 'type': 'log'},                    
+    #                 'yaxis': {'title': "MSE"}
+    #             }
+    #         )
+    #     )
+    # )
+    
+    # plot(eps, err_weighted, 'Importance Sampling', "Weighted")
+
+    
+#    def plot(x, y, title, name, new):
+
+
 
 if __name__ == '__main__':
-    #fig_5_1()
-    fig_5_2()
+    # fig_5_1()
+    # fig_5_2()
+    fig_5_3()

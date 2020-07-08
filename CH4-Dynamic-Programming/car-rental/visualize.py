@@ -12,6 +12,7 @@ def contour(data, title):
         )
     )
 
+
 def plot_V(V):
     contour(V, 'Values - Car Rental')
 
