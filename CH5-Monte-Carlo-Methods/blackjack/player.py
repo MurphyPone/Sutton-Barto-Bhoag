@@ -19,7 +19,7 @@ def target_π(agent_usable_ace, agent_sum, dealer_showing):
     return π[agent_sum]
 
 # agent's behavior policy
-def behavior_π(agent_usable_ace, dealer_showing):
+def behavior_π(agent_usable_ace, agent_sum, dealer_showing):
     if np.random.binomial(1, 0.5) == 1:
         return STAND
     return HIT
@@ -82,7 +82,7 @@ def play(π, init_s=None, init_a=None):
             action = init_a
             init_a = None 
         else: 
-            action = target_π(agent_usable_ace, agent_sum, dealer_card1)
+            action = π(agent_usable_ace, agent_sum, dealer_card1)
         
         # track actions for behavior sampling
         agent_trajectory.append([(agent_usable_ace, agent_sum, dealer_card1), action])
@@ -166,20 +166,24 @@ def monte_carlo_ε(eps):
         return np.random.choice([action for action, val in enumerate(vals) if val == np.max(vals) ])
 
     for ep in tqdm(range(eps)):
+        # randomly gen a sa pair
         init_s = [bool(np.random.choice([0, 1])), 
-                        np.random.choice([12, 22]),
-                        np.random.choice([1, 11])]
+                        np.random.choice(range(12, 22)),
+                        np.random.choice(range(1, 11))]
         init_a = np.random.choice(ACTIONS)
         current_π = behavior_π if ep else target_π
-        _, episodic_r, trajectory = play(current_π, init_s, init_a)
+        _, episodic_r, trajectory = play(current_π, init_s=init_s, init_a=init_a)
         first_visit_check = set()
+        
         for (usable_ace, agent_sum, dealer_card), action in trajectory:
             usable_ace = int(usable_ace)
             agent_sum -= 12
             dealer_card -= 1
             state_action = (usable_ace, agent_sum, dealer_card, action)
+            
             if state_action in first_visit_check:
                 continue
+
             first_visit_check.add(state_action)
             sa_vals[agent_sum, dealer_card, usable_ace, action] += episodic_r
             sa_pair_count[agent_sum, dealer_card, usable_ace, action] += 1
@@ -224,6 +228,9 @@ def monte_carlo_off_policy(eps):
     
     return ordinary_sampling
 
+
+## Plot results of the above MC methods
+
 def fig_5_1():
     states_usable_ace_1, states_no_usable_ace_1 = monte_carlo_on_policy(10000)
     states_usable_ace_2, states_no_usable_ace_2 = monte_carlo_on_policy(500000)
@@ -237,8 +244,52 @@ def fig_5_1():
         viz.heatmap(
             X=np.flipud(state), 
             win=title, 
-            opts=dict(title=title)
+            opts=dict(
+                title=title,
+                columnnames=list(reversed(range(1,11))),
+                rownames=list(reversed(range(12,22))),
+                layoutopts=dict(
+                    plotly={
+                        'xaxis': {'title': "dealer showing"},
+                        'yaxis': {'title': "agent sum"}
+                    }
+                )
+            )
+        )
+
+def fig_5_2():
+    sa_vals = monte_carlo_ε(500000)
+    state_val_usable_ace = np.max(sa_vals[:, :, 1, :], axis=-1)
+    state_val_no_usable_ace = np.max(sa_vals[:, :, 0, :], axis=-1)
+
+    # optimal policies for ace/no ace states
+    π_usable_ace = np.argmax(sa_vals[:, :, 1, :], axis=-1)
+    π_no_usable_ace = np.argmax(sa_vals[:, :, 0, :], axis=-1)
+
+    states = [π_usable_ace, state_val_usable_ace, 
+                π_no_usable_ace, state_val_no_usable_ace]
+
+    
+    titles = ['π* w/ usable Ace', 'v* w/ usable Ace',
+                'π* w/o usable Ace', 'v* w/o usable Ace']
+
+    for state, title in zip(states, titles):
+        viz.heatmap(
+            X=np.flipud(state), 
+            win=title, 
+            opts=dict(
+                title=title,
+                columnnames=list(reversed(range(1,11))),
+                rownames=list(reversed(range(12,22))),
+                layoutopts=dict(
+                    plotly={
+                        'xaxis': {'title': "dealer showing"},
+                        'yaxis': {'title': "agent sum"}
+                    }
+                )
+            )
         )
 
 if __name__ == '__main__':
-    fig_5_1()
+    #fig_5_1()
+    fig_5_2()
