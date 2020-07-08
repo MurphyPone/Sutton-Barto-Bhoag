@@ -1,9 +1,12 @@
 import numpy as np 
-# from visualize import *
+from tqdm import tqdm
+from visdom import Visdom
+
+viz = Visdom()
 
 HIT = 0 
 STAND = 1 # hit or stand
-actions = [HIT, STAND] # TODO deprecate these to just one-hots
+ACTIONS = [HIT, STAND] # TODO deprecate these to just one-hots
 
 #### agent's policy denoted: π
 π = np.zeros(22, dtype=np.int)
@@ -30,7 +33,7 @@ for i in range(17, 22):
     ω[i] = STAND 
 
 def get_card():
-    card = np.random(1, 14)
+    card = np.random.randint(1, 14)
     return min(card, 10)     # face card value is 10
 
 # used for aces
@@ -82,7 +85,7 @@ def play(π, init_s=None, init_a=None):
             action = target_π(agent_usable_ace, agent_sum, dealer_card1)
         
         # track actions for behavior sampling
-        agent_trajectory.append([agent_usable_ace, agent_sum, dealer_card1], action)
+        agent_trajectory.append([(agent_usable_ace, agent_sum, dealer_card1), action])
 
         if action == STAND:
             break # end the agent's turn
@@ -128,6 +131,62 @@ def play(π, init_s=None, init_a=None):
     else: 
         return state, -1, agent_trajectory
 
+def monte_carlo_on_policy(eps):
+    states_usable_ace = np.zeros((10,10))
+    states_usable_ace_count = np.ones((10, 10)) # init to 1 to prevent div/0
+    states_no_usable_ace = np.zeros((10,10))
+    states_no_usable_ace_count = np.ones((10, 10))
+
+    for i in tqdm(range(0, eps)):
+        _, episodic_r, agent_trajectory = play(behavior_π)
+        for(usable_ace, agent_sum, dealer_card), action in agent_trajectory:
+            agent_sum -= 12
+            dealer_card -= 1
+            if usable_ace:
+                states_usable_ace_count[agent_sum, dealer_card] += 1
+                states_usable_ace[agent_sum, dealer_card] += episodic_r
+            else:
+                states_no_usable_ace_count[agent_sum, dealer_card] += 1
+                states_no_usable_ace[agent_sum, dealer_card] += episodic_r
+    return states_usable_ace / states_no_usable_ace_count, states_no_usable_ace / states_no_usable_ace_count
+
+# MC with exploring start
+def monte_carlo_ε(eps):
+    # state action vals for agent_sum, deealer_card, usable_ace, action
+    sa_vals = np.zeros((10, 10, 2, 2)) 
+    sa_pair_count = np.ones((10, 10, 2, 2))
+
+    # override 
+    def behavior_π(usable_ace, agent_sum, dealer_showing):
+        usable_ace = int(usable_ace)
+        agent_sum -= 12 
+        dealer_showing -=1
+        vals = sa_vals[agent_sum, dealer_showing, usable_ace, :] / sa_pair_count[agent_sum, dealer_showing, usable_ace, :]
+        
+        return np.random.choice([action for action, val in enumerate(vals) if val == np.max(vals) ])
+
+    for ep in tqdm(range(eps)):
+        init_s = [bool(np.random.choice([0, 1])), 
+                        np.random.choice([12, 22]),
+                        np.random.choice([1, 11])]
+        init_a = np.random.choice(ACTIONS)
+        current_π = behavior_π if ep else target_π
+        _, episodic_r, trajectory = play(current_π, init_s, init_a)
+        first_visit_check = set()
+        for (usable_ace, agent_sum, dealer_card), action in trajectory:
+            usable_ace = int(usable_ace)
+            agent_sum -= 12
+            dealer_card -= 1
+            state_action = (usable_ace, agent_sum, dealer_card, action)
+            if state_action in first_visit_check:
+                continue
+            first_visit_check.add(state_action)
+            sa_vals[agent_sum, dealer_card, usable_ace, action] += episodic_r
+            sa_pair_count[agent_sum, dealer_card, usable_ace, action] += 1
+    
+    return sa_vals / sa_pair_count
+
+
 
 def monte_carlo_off_policy(eps):
     init_s = [True, 13, 2]
@@ -156,7 +215,7 @@ def monte_carlo_off_policy(eps):
     weighted_returns = rhos * returns
     weighted_returns = np.add.accumulate(weighted_returns)
     rhos = np.add.accumulate(rhos)
-    
+
     ordinary_sampling = weighted_returns / np.arange(1, eps + 1) # plus one to avoid div/0
 
     # TODO
@@ -164,3 +223,22 @@ def monte_carlo_off_policy(eps):
         weighted_sampling = np.where(rhos != 0, weighted_returns / rhos, 0)
     
     return ordinary_sampling
+
+def fig_5_1():
+    states_usable_ace_1, states_no_usable_ace_1 = monte_carlo_on_policy(10000)
+    states_usable_ace_2, states_no_usable_ace_2 = monte_carlo_on_policy(500000)
+
+    states = [states_usable_ace_1, states_usable_ace_2,
+                states_no_usable_ace_1, states_no_usable_ace_2]
+    
+    titles = ['usable A - 10,000 eps', 'usable A - 500,000 eps',
+                'No usable A - 10,000 eps', 'No usable A - 500,000 eps']
+    for state, title in zip(states, titles):
+        viz.heatmap(
+            X=np.flipud(state), 
+            win=title, 
+            opts=dict(title=title)
+        )
+
+if __name__ == '__main__':
+    fig_5_1()
